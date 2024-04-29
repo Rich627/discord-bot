@@ -13,7 +13,7 @@ creds = ServiceAccountCredentials.from_json_keyfile_name('/Users/rich/Desktop/di
 client = gspread.authorize(creds)
 
 # 打開Google Sheets
-sheet_id = '11LVgaHo5kts1b_-3tJ7pWWZFbxvgenx7pFxR_yXtXE0'
+sheet_id = ""
 sheet = client.open_by_key(sheet_id).sheet1
 
 # 讀取所有行

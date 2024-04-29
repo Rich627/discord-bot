@@ -1,9 +1,7 @@
 import discord
 import asyncio
 import json
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import os
 
@@ -12,26 +10,20 @@ with open('config.json', 'r') as config_file:
 
 TOKEN = config["TOKEN"]
 CHANNEL_ID = config["CHANNEL_ID"]
-SHEET_ID = '11LVgaHo5kts1b_-3tJ7pWWZFbxvgenx7pFxR_yXtXE0'
-SHEET_RANGE = '工作表1!C:C'
+SHEET_ID = ''
+SHEET_RANGE = 'Sheet1!A:D'
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-def get_sheets_service():
+def google_service(api, version):
     creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'service_account_key.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
-    service = build('sheets', 'v4', credentials=creds)
-    return service.spreadsheets()
+    with open('google-cred.json', 'r') as creds_file:
+        creds_json = json.load(creds_file)
+        creds = service_account.Credentials.from_service_account_info(creds_json, scopes=SCOPES)
+    service = build(api, version, credentials=creds)
+    return service
+
+sheet_service = google_service('sheets', 'v4')
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -41,12 +33,11 @@ client = discord.Client(intents=intents)
 async def create_invite_and_update_sheet():
     await client.wait_until_ready()
     channel = await client.fetch_channel(CHANNEL_ID)
-    sheet_service = get_sheets_service()
 
-    for i in range(20):
+    for i in range(251):
         # 讀取特定單元格的值
-        name_email_range = f'工作表1!A{i+2}:B{i+2}'
-        name_email_result = sheet_service.values().get(spreadsheetId=SHEET_ID, range=name_email_range).execute()
+        name_email_range = f'Sheet1!A{i+2}:B{i+2}'
+        name_email_result = sheet_service.spreadsheets().values().get(spreadsheetId=SHEET_ID, range=name_email_range).execute()
         name_email_values = name_email_result.get('values', [])
         
         if not name_email_values:
@@ -61,24 +52,23 @@ async def create_invite_and_update_sheet():
 
         # 更新邀請連結到 Google Sheets
         next_row = i + 2 # 假設每次都是寫入新的一行
-        new_range = f'工作表1!C{next_row}'
+        new_range = f'Sheet1!E{next_row}'
         body = {'values': [[invite.url]]}
-        result = sheet_service.values().update(
+        result = sheet_service.spreadsheets().values().update(
             spreadsheetId=SHEET_ID, range=new_range,
             valueInputOption='RAW', body=body).execute()
 
-        # # 在 Discord 頻道發送訊息
-        # message_content = f"{name} {email} {invite.url}"
-        # await channel.send(message_content)
+        # 在 Discord 頻道發送訊息
+        message_content = f"{name} {email} {invite.url}"
+        await channel.send(message_content)
 
-        # # 發送寫入成功訊息
-        # success_message = "資料寫入成功！"
-        # await channel.send(success_message)
-
+        # 發送寫入成功訊息
+        success_message = "資料寫入成功！"
+        await channel.send(success_message)
+        
         await asyncio.sleep(1)
 
     await client.close()
-
 
 @client.event
 async def on_ready():
